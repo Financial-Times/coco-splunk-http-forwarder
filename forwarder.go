@@ -1,16 +1,14 @@
 package main
 
-import(
-	"os"
+import (
 	"bufio"
-	"log"
-	"io"
-	"net/http"
-	"strings"
 	"crypto/tls"
-
+	"io"
+	"log"
+	"net/http"
+	"os"
+	"strings"
 )
-
 
 func main() {
 	br := bufio.NewReader(os.Stdin)
@@ -32,14 +30,15 @@ func postToSplunk(s string) {
 		log.Println(err)
 	} else {
 		if r.StatusCode != 200 {
-			log.Printf("Unexpected status code %v" , r.StatusCode)
+			log.Printf("Unexpected status code %v", r.StatusCode)
 		}
 	}
 
 }
 
 var client *http.Client
-func init(){
+
+func init() {
 	tlsConfig := &tls.Config{InsecureSkipVerify: true}
 	transport := &http.Transport{TLSClientConfig: tlsConfig}
 	client = &http.Client{Transport: transport}
