@@ -26,8 +26,8 @@ func main() {
 	}
 }
 
-func postToSplunk(s string){
-	r, err := client.Post("https://log:5punk@splunk.glb.ft.com/coco-up/fleet", "application/json", strings.NewReader(s))
+func postToSplunk(s string) {
+	r, err := client.Post("https://user:pwd@splunk.glb.ft.com/coco-up/fleet", "application/json", strings.NewReader(s))
 	if err != nil {
 		log.Println(err)
 	} else {
