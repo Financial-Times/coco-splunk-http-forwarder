@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"fmt"
 	"flag"
 )
 
