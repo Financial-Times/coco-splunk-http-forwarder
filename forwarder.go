@@ -8,12 +8,17 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"fmt"
+	"flag"
 )
 
 func main() {
+	fmt.Println(len(os.Args), os.Args)
+	fmt.Println("fwdUrl=" + fwdUrl)
 	br := bufio.NewReader(os.Stdin)
 	for {
 		str, err := br.ReadString('\n')
+
 		if err != nil {
 			if err == io.EOF {
 				return
@@ -25,7 +30,7 @@ func main() {
 }
 
 func postToSplunk(s string) {
-	r, err := client.Post("https://user:pwd@splunk.glb.ft.com/coco-up/fleet", "application/json", strings.NewReader(s))
+	r, err := client.Post(fwdUrl, "application/json", strings.NewReader(s))
 	if err != nil {
 		log.Println(err)
 	} else {
@@ -37,9 +42,12 @@ func postToSplunk(s string) {
 }
 
 var client *http.Client
-
+var fwdUrl string
 func init() {
 	tlsConfig := &tls.Config{InsecureSkipVerify: true}
 	transport := &http.Transport{TLSClientConfig: tlsConfig}
 	client = &http.Client{Transport: transport}
+
+	flag.StringVar(&fwdUrl, "url", "https://user:pwd@splunk.glb.ft.com/coco-up/fleet", "The url to forward to")
+	flag.Parse()
 }
