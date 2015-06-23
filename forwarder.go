@@ -13,8 +13,6 @@ import (
 )
 
 func main() {
-	fmt.Println(len(os.Args), os.Args)
-	fmt.Println("fwdUrl=" + fwdUrl)
 	br := bufio.NewReader(os.Stdin)
 	for {
 		str, err := br.ReadString('\n')
@@ -35,7 +33,7 @@ func postToSplunk(s string) {
 		log.Println(err)
 	} else {
 		if r.StatusCode != 200 {
-			log.Printf("Unexpected status code %v", r.StatusCode)
+			log.Printf("Unexpected status code %v when sending %v to %v", r.StatusCode, s, fwdUrl)
 		}
 	}
 
