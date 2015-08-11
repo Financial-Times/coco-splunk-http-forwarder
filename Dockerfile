@@ -1,4 +1,3 @@
-from golang
-
-RUN go get github.com/Financial-Times/coco-splunk-http-forwarder
-CMD $GOPATH/bin/coco-splunk-http-forwarder -url=$FORWARD_URL
+FROM gliderlabs/alpine:3.2
+ADD coco-splunk-http-forwarder /coco-splunk-http-forwarder
+CMD coco-splunk-http-forwarder -url=$FORWARD_URL
