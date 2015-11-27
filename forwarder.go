@@ -3,12 +3,12 @@ package main
 import (
 	"bufio"
 	"crypto/tls"
+	"flag"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"strings"
-	"flag"
 )
 
 func main() {
@@ -28,6 +28,7 @@ func main() {
 
 func postToSplunk(s string) {
 	r, err := client.Post(fwdUrl, "application/json", strings.NewReader(s))
+	defer r.Body.Close()
 	if err != nil {
 		log.Println(err)
 	} else {
@@ -40,6 +41,7 @@ func postToSplunk(s string) {
 
 var client *http.Client
 var fwdUrl string
+
 func init() {
 	tlsConfig := &tls.Config{InsecureSkipVerify: true}
 	transport := &http.Transport{TLSClientConfig: tlsConfig}
