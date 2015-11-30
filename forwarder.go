@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -28,10 +29,11 @@ func main() {
 
 func postToSplunk(s string) {
 	r, err := client.Post(fwdUrl, "application/json", strings.NewReader(s))
-	defer r.Body.Close()
 	if err != nil {
 		log.Println(err)
 	} else {
+		defer r.Body.Close()
+		io.Copy(ioutil.Discard, r.Body)
 		if r.StatusCode != 200 {
 			log.Printf("Unexpected status code %v when sending %v to %v", r.StatusCode, s, fwdUrl)
 		}
