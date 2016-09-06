@@ -13,6 +13,9 @@ import (
 )
 
 func main() {
+	log.Println("Splunk forwarder: Started")
+	defer log.Println("Splunk forwarder: Started")
+
 	br := bufio.NewReader(os.Stdin)
 	for {
 		str, err := br.ReadString('\n')
