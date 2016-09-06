@@ -14,7 +14,7 @@ import (
 
 func main() {
 	log.Println("Splunk forwarder: Started")
-	defer log.Println("Splunk forwarder: Started")
+	defer log.Println("Splunk forwarder: Stopped")
 
 	br := bufio.NewReader(os.Stdin)
 	for {
