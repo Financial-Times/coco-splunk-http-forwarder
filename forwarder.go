@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 func main() {
@@ -26,7 +27,10 @@ func main() {
 			}
 			log.Fatal(err)
 		}
+		start := time.Now()
 		postToSplunk(str)
+		elapsed := time.Since(start)
+		log.Printf("Log event delivered to %s in %s", fwdUrl, elapsed)
 	}
 }
 
