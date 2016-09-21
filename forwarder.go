@@ -75,7 +75,6 @@ func init() {
 	tlsConfig := &tls.Config{InsecureSkipVerify: true}
 	transport := &http.Transport{
 		TLSClientConfig:     tlsConfig,
-		MaxIdleConns:        workers,
 		MaxIdleConnsPerHost: workers,
 	}
 	client = &http.Client{Transport: transport}
