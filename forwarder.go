@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-const workers = 4
+const workers = 8
 
 func main() {
 	log.Println("Splunk forwarder: Started")
