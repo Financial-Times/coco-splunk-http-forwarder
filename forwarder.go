@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 )
 
 const workers = 4
@@ -28,7 +29,10 @@ func main() {
 		go func() {
 			defer wg.Done()
 			for msg := range forSplunk {
+			    start := time.Now()
 				postToSplunk(msg)
+				elapsed := time.Since(start)
+				log.Printf("Log event delivered to %s in %s", fwdUrl, elapsed)
 			}
 		}()
 	}
