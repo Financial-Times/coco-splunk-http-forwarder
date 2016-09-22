@@ -28,11 +28,8 @@ func main() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for msg := range forSplunk {
-			    start := time.Now()
-				postToSplunk(msg)
-				elapsed := time.Since(start)
-				log.Printf("Log event delivered to %s in %s", fwdUrl, elapsed)
+			for msg := range forSplunk {			    
+				postToSplunk(msg)					
 			}
 		}()
 	}
@@ -48,7 +45,10 @@ func main() {
 			}
 			log.Fatal(err)
 		}
+		start := time.Now()
 		forSplunk <- str
+        elapsed := time.Since(start)
+        log.Printf("Log event delivered to %s in %s", fwdUrl, elapsed)		
 	}
 
 	wg.Wait()
