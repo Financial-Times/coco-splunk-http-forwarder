@@ -74,6 +74,7 @@ func main() {
 			forSplunk <- str
 		})
 
+		log.Printf("Max time %v, Min time %v, Mean time %v",t.Max(), t.Min(), t.Mean())
 	}
 
 	wg.Wait()
