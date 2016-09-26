@@ -44,6 +44,8 @@ func main() {
 
 	forSplunk := make(chan string, 256)
 
+	go queueLenMetrics(forSplunk)
+
 	var wg sync.WaitGroup
 
 	for i := 0; i < workers; i++ {
@@ -75,6 +77,15 @@ func main() {
 	}
 
 	wg.Wait()
+}
+
+func queueLenMetrics(queue chan string) {
+	s := metrics.NewExpDecaySample(1024, 0.015)
+	h := metrics.GetOrRegisterHistogram("post.queue.length", nil, s)
+	for {
+		time.Sleep(200 * time.Millisecond)
+		h.Update(int64(len(queue)))
+	}
 }
 
 func postToSplunk(s string) {
