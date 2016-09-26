@@ -7,20 +7,42 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/cyberdelia/go-metrics-graphite"
+	"github.com/rcrowley/go-metrics"
 )
 
 const workers = 8
 
+var (
+	client *http.Client
+	fwdUrl string
+
+	//graphitePrefix string             = "coco.services.$ENV.splunk-forwarder-$MACHINE"
+	graphitePrefix string = "coco.services.dummy.splunk-forwarder-foo" // FIXME: don't hardcode
+)
+
 func main() {
+
+	addrStr := "graphite.ft.com:2003" // FIXME: don't hardcode
+	addr, err := net.ResolveTCPAddr("tcp", addrStr)
+	if err != nil {
+		panic(err)
+	}
+
+	go graphite.Graphite(metrics.DefaultRegistry, 2*time.Second, graphitePrefix, addr)
+	go metrics.Log(metrics.DefaultRegistry, 5*time.Second, log.New(os.Stderr, "metrics: ", log.Lmicroseconds))
+
 	log.Println("Splunk forwarder: Started")
 	defer log.Println("Splunk forwarder: Stopped")
 
-	forSplunk := make(chan string)
+	forSplunk := make(chan string, 256)
 
 	var wg sync.WaitGroup
 
@@ -28,8 +50,8 @@ func main() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for msg := range forSplunk {			    
-				postToSplunk(msg)					
+			for msg := range forSplunk {
+				postToSplunk(msg)
 			}
 		}()
 	}
@@ -45,31 +67,31 @@ func main() {
 			}
 			log.Fatal(err)
 		}
-		start := time.Now()
-		forSplunk <- str
-        elapsed := time.Since(start)
-        log.Printf("Log event delivered to %s in %s", fwdUrl, elapsed)		
+		t := metrics.GetOrRegisterTimer("post.queue.latency", nil)
+		t.Time(func() {
+			forSplunk <- str
+		})
+
 	}
 
 	wg.Wait()
 }
 
 func postToSplunk(s string) {
-	r, err := client.Post(fwdUrl, "application/json", strings.NewReader(s))
-	if err != nil {
-		log.Println(err)
-	} else {
-		defer r.Body.Close()
-		io.Copy(ioutil.Discard, r.Body)
-		if r.StatusCode != 200 {
-			log.Printf("Unexpected status code %v when sending %v to %v", r.StatusCode, s, fwdUrl)
+	t := metrics.GetOrRegisterTimer("post.time", nil)
+	t.Time(func() {
+		r, err := client.Post(fwdUrl, "application/json", strings.NewReader(s))
+		if err != nil {
+			log.Println(err)
+		} else {
+			defer r.Body.Close()
+			io.Copy(ioutil.Discard, r.Body)
+			if r.StatusCode != 200 {
+				log.Printf("Unexpected status code %v when sending %v to %v", r.StatusCode, s, fwdUrl)
+			}
 		}
-	}
-
+	})
 }
-
-var client *http.Client
-var fwdUrl string
 
 func init() {
 	tlsConfig := &tls.Config{InsecureSkipVerify: true}
