@@ -48,7 +48,7 @@ func main() {
 		start := time.Now()
 		forSplunk <- str
         elapsed := time.Since(start)
-        log.Printf("Log event delivered to %s in %s", fwdUrl, elapsed)		
+        log.Printf("Log event delivered to channel in %v", elapsed)		
 	}
 
 	wg.Wait()
