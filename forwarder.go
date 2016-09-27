@@ -14,7 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cyberdelia/go-metrics-graphite"
+	//"github.com/cyberdelia/go-metrics-graphite"
+	"../go-metrics-graphite-jussi-ft"
 	"github.com/rcrowley/go-metrics"
 )
 
@@ -34,10 +35,13 @@ func main() {
 	addr, err := net.ResolveTCPAddr("tcp", addrStr)
 	if err != nil {
 		panic(err)
+	} else {
+	    log.Printf("Address %v resolved", addr)
 	}
+	
 
-	go graphite.Graphite(metrics.DefaultRegistry, 2*time.Second, graphitePrefix, addr)
-	go metrics.Log(metrics.DefaultRegistry, 5*time.Second, log.New(os.Stderr, "metrics: ", log.Lmicroseconds))
+	go graphite.Graphite(metrics.DefaultRegistry, 5*time.Second, graphitePrefix, addr)
+	go metrics.Log(metrics.DefaultRegistry, 5*time.Second, log.New(os.Stdout, "metrics ", log.Lmicroseconds))
 
 	log.Println("Splunk forwarder: Started")
 	defer log.Println("Splunk forwarder: Stopped")
@@ -69,7 +73,7 @@ func main() {
 			}
 			log.Fatal(err)
 		}
-		t := metrics.GetOrRegisterTimer("post.queue.latency", nil)
+		t := metrics.GetOrRegisterTimer("post.queue.latency", metrics.DefaultRegistry)
 		t.Time(func() {
 			forSplunk <- str
 		})
@@ -82,7 +86,7 @@ func main() {
 
 func queueLenMetrics(queue chan string) {
 	s := metrics.NewExpDecaySample(1024, 0.015)
-	h := metrics.GetOrRegisterHistogram("post.queue.length", nil, s)
+	h := metrics.GetOrRegisterHistogram("post.queue.length", metrics.DefaultRegistry, s)
 	for {
 		time.Sleep(200 * time.Millisecond)
 		h.Update(int64(len(queue)))
@@ -90,7 +94,7 @@ func queueLenMetrics(queue chan string) {
 }
 
 func postToSplunk(s string) {
-	t := metrics.GetOrRegisterTimer("post.time", nil)
+	t := metrics.GetOrRegisterTimer("post.time", metrics.DefaultRegistry)
 	t.Time(func() {
 		r, err := client.Post(fwdUrl, "application/json", strings.NewReader(s))
 		if err != nil {
