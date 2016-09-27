@@ -14,8 +14,7 @@ import (
 	"sync"
 	"time"
 
-	//"github.com/cyberdelia/go-metrics-graphite"
-	"../go-metrics-graphite-jussi-ft"
+	"github.com/cyberdelia/go-metrics-graphite"
 	"github.com/rcrowley/go-metrics"
 )
 
@@ -40,8 +39,8 @@ func main() {
 	}
 	
 
-	go graphite.Graphite(metrics.DefaultRegistry, 5*time.Second, graphitePrefix, addr)
-	go metrics.Log(metrics.DefaultRegistry, 5*time.Second, log.New(os.Stdout, "metrics ", log.Lmicroseconds))
+	go graphite.Graphite(metrics.DefaultRegistry, 1*time.Second, graphitePrefix, addr)
+	go metrics.Log(metrics.DefaultRegistry, 1*time.Second, log.New(os.Stdout, "metrics ", log.Lmicroseconds))
 
 	log.Println("Splunk forwarder: Started")
 	defer log.Println("Splunk forwarder: Stopped")
