@@ -40,7 +40,6 @@ func main() {
 			log.Fatal(err)
 		}
 		logChan <- str
-		log.Printf("Event sent to splunk")
 	}
 }
 
