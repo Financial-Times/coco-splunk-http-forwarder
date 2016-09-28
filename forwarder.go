@@ -11,7 +11,6 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"time"
 )
 
 const workers = 8
@@ -28,7 +27,7 @@ func main() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for msg := range forSplunk {			    
+			for msg := range forSplunk {
 				postToSplunk(msg)					
 			}
 		}()
@@ -45,10 +44,7 @@ func main() {
 			}
 			log.Fatal(err)
 		}
-		start := time.Now()
 		forSplunk <- str
-        elapsed := time.Since(start)
-        log.Printf("Log event delivered to channel in %v", elapsed)		
 	}
 
 	wg.Wait()
