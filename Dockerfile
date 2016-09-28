@@ -1,4 +1,4 @@
-FROM gliderlabs/alpine:3.2
+FROM gliderlabs/alpine:3.4
 
 ADD . /splunk-http-forwarder
 RUN apk --update add go git\

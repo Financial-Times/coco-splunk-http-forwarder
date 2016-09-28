@@ -12,9 +12,21 @@ import (
 	"strings"
 )
 
+const workers = 8
+
 func main() {
 	log.Println("Splunk forwarder: Started")
 	defer log.Println("Splunk forwarder: Stopped")
+
+	logChan := make(chan string)
+
+	for i := 0; i < workers; i++ {
+		go func() {
+			for msg := range logChan {
+				postToSplunk(msg)					
+			}
+		}()
+	}
 
 	br := bufio.NewReader(os.Stdin)
 	for {
@@ -22,11 +34,12 @@ func main() {
 
 		if err != nil {
 			if err == io.EOF {
+				close(logChan)
 				return
 			}
 			log.Fatal(err)
 		}
-		postToSplunk(str)
+		logChan <- str
 	}
 }
 
@@ -49,7 +62,10 @@ var fwdUrl string
 
 func init() {
 	tlsConfig := &tls.Config{InsecureSkipVerify: true}
-	transport := &http.Transport{TLSClientConfig: tlsConfig}
+	transport := &http.Transport{
+		TLSClientConfig:     tlsConfig,
+		MaxIdleConnsPerHost: workers,
+	}
 	client = &http.Client{Transport: transport}
 
 	flag.StringVar(&fwdUrl, "url", "https://user:pwd@splunk.glb.ft.com/coco-up/fleet", "The url to forward to")
