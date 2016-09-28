@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 )
 
 const workers = 8
@@ -21,12 +20,8 @@ func main() {
 
 	logChan := make(chan string)
 
-	var wg sync.WaitGroup
-
 	for i := 0; i < workers; i++ {
-		wg.Add(1)
 		go func() {
-			defer wg.Done()
 			for msg := range logChan {
 				postToSplunk(msg)					
 			}
@@ -45,9 +40,8 @@ func main() {
 			log.Fatal(err)
 		}
 		logChan <- str
+		log.Printf("Event sent to splunk")
 	}
-
-	wg.Wait()
 }
 
 func postToSplunk(s string) {
