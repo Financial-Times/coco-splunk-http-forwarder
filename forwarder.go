@@ -19,7 +19,7 @@ func main() {
 	log.Println("Splunk forwarder: Started")
 	defer log.Println("Splunk forwarder: Stopped")
 
-	forSplunk := make(chan string)
+	logChan := make(chan string)
 
 	var wg sync.WaitGroup
 
@@ -27,7 +27,7 @@ func main() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for msg := range forSplunk {
+			for msg := range logChan {
 				postToSplunk(msg)					
 			}
 		}()
@@ -39,12 +39,12 @@ func main() {
 
 		if err != nil {
 			if err == io.EOF {
-				close(forSplunk)
+				close(logChan)
 				return
 			}
 			log.Fatal(err)
 		}
-		forSplunk <- str
+		logChan <- str
 	}
 
 	wg.Wait()
