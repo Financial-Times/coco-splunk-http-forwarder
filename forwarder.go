@@ -18,12 +18,12 @@ import (
 
 )
 
-const workers = 8
 var (
     client *http.Client
     fwdUrl string
     env string
     dryrun bool
+    workers int
     graphitePrefix string = "coco.services"
     graphitePostfix string = "splunk-forwarder"
     graphiteServer string
@@ -63,8 +63,11 @@ func main() {
 		log.Printf("Starting worker %v", i)
 		go func() {
 			for msg := range logChan {
-				log.Printf("Event received from logChan")
-				postToSplunk(msg)			
+                if dryrun {
+                    log.Printf("Dryrun enabled, not posting to %v", fwdUrl)
+                } else {
+                    postToSplunk(msg)   
+                }
 			}
 		}()
 	}
@@ -79,12 +82,9 @@ func main() {
 				return
 			}
 			log.Fatal(err)
-		} /*else {
-		    log.Printf("Processed event: %v", str)
-		}*/
+		} 
 		t := metrics.GetOrRegisterTimer("post.queue.latency", metrics.DefaultRegistry)
 		t.Time(func() {
-		  log.Printf("Posting event to logChan")
 		  logChan <- str
 		})
 	}
@@ -102,7 +102,6 @@ func queueLenMetrics(queue chan string) {
 func postToSplunk(s string) {
     t := metrics.GetOrRegisterTimer("post.time", metrics.DefaultRegistry)
     t.Time(func() {
-        log.Printf("Posting event to Splunk: %v ", s )
         r, err := client.Post(fwdUrl, "application/json", strings.NewReader(s))
         if err != nil {
             log.Println(err)
@@ -130,6 +129,7 @@ func init() {
 	flag.StringVar(&fwdUrl, "url", "", "The url to forward to")
 	flag.StringVar(&env, "env", "dummy", "environment_tag value")
 	flag.StringVar(&graphiteServer, "graphiteserver", "graphite.ft.com:2003", "Graphite server host name and port")
-	flag.BoolVar(&dryrun, "dryrun", false, "Dryrun boolean value, default false")
+	flag.BoolVar(&dryrun, "dryrun", false, "Dryrun true disables network connectivity. Use it for testing offline. Default value false")
+	flag.IntVar(&workers, "workers", 8, "Number of concurrent workers")
 	flag.Parse()
 }
