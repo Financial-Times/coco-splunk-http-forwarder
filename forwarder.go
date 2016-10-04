@@ -38,7 +38,7 @@ func main() {
     
 	log.Println("Splunk forwarder: Started")
 	defer log.Println("Splunk forwarder: Stopped")
-    logChan := make(chan string, 256)
+    logChan := make(chan string)
 
     hostname, err := os.Hostname() //host name reported by the kernel, used for graphiteNamespace
     if err != nil {
