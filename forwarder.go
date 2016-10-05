@@ -84,7 +84,7 @@ func main() {
 			if err == io.EOF {
 				close(logChan)
 				log.Printf("Waiting buffered channel consumer to finish processing messages\n")
-                wg.Wait()
+				wg.Wait()
 				return
 			}
 			log.Fatal(err)
