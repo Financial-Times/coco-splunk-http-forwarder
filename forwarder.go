@@ -39,7 +39,8 @@ func main() {
     
 	log.Printf("Splunk forwarder (%v workers): Started", workers)
 	defer log.Println("Splunk forwarder: Stopped")
-    logChan := make(chan string)
+    logChan := make(chan string, 256)
+    //logChan := make(chan string)
 
     hostname, err := os.Hostname() //host name reported by the kernel, used for graphiteNamespace
     if err != nil {
@@ -105,6 +106,7 @@ func queueLenMetrics(queue chan string) {
 func postToSplunk(s string) {
     t := metrics.GetOrRegisterTimer("post.time", metrics.DefaultRegistry)
     t.Time(func() {
+        log.Printf("Posting event %v to splunk", counter)
         r, err := client.Post(fwdUrl, "application/json", strings.NewReader(s))
         if err != nil {
             log.Println(err)
