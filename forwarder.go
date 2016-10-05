@@ -33,12 +33,12 @@ var (
 
 func main() {
     if len(fwdUrl) == 0 { //Check whether -url parameter was provided 
-        log.Printf("-url=http_endpoint parameter must be provided")
+        log.Printf("-url=http_endpoint parameter must be provided\n")
         os.Exit(1) //If not fail visibly as we are unable to send logs to Splunk
     }
     
-	log.Printf("Splunk forwarder (%v workers): Started", workers)
-	defer log.Println("Splunk forwarder: Stopped")
+	log.Printf("Splunk forwarder (%v workers): Started\n", workers)
+	defer log.Printf("Splunk forwarder: Stopped\n")
     //logChan := make(chan string, 256)
     logChan := make(chan string)
 
@@ -47,9 +47,9 @@ func main() {
         log.Println(err)
     }
     graphiteNamespace := strings.Join([]string{graphitePrefix, env, graphitePostfix, hostname}, ".") // Join prefix, env and postfix
-    log.Printf("%v namespace: %v", graphiteServer, graphiteNamespace)
+    log.Printf("%v namespace: %v\n", graphiteServer, graphiteNamespace)
     if dryrun {
-        log.Printf("Dryrun enabled, not connecting to %v", graphiteServer)
+        log.Printf("Dryrun enabled, not connecting to %v\n", graphiteServer)
     } else {
         addr, err := net.ResolveTCPAddr("tcp", graphiteServer)
         if err != nil {
@@ -66,7 +66,7 @@ func main() {
 		go func() {
 			for msg := range logChan {
                 if dryrun {
-                    log.Printf("Dryrun enabled, not posting to %v", fwdUrl)
+                    log.Printf("Dryrun enabled, not posting to %v\n", fwdUrl)
                 } else {
                     postToSplunk(msg)   
                 }
@@ -88,7 +88,7 @@ func main() {
 		t := metrics.GetOrRegisterTimer("post.queue.latency", metrics.DefaultRegistry)
 		t.Time(func() {
 		  counter++
-		  log.Printf("Delivering event %v to logChan", counter)
+		  log.Printf("Delivering event %v to logChan\n", counter)
 		  logChan <- str
 		})
 	}
@@ -106,7 +106,7 @@ func queueLenMetrics(queue chan string) {
 func postToSplunk(s string) {
     t := metrics.GetOrRegisterTimer("post.time", metrics.DefaultRegistry)
     t.Time(func() {
-        log.Printf("Posting event %v to splunk", counter)
+        log.Printf("Posting event to splunk\n")
         r, err := client.Post(fwdUrl, "application/json", strings.NewReader(s))
         if err != nil {
             log.Println(err)
@@ -115,9 +115,9 @@ func postToSplunk(s string) {
             defer r.Body.Close()
             io.Copy(ioutil.Discard, r.Body)
             if r.StatusCode != 200 {
-                log.Printf("Unexpected status code %v when sending %v to %v", r.StatusCode, s, fwdUrl)
+                log.Printf("Unexpected status code %v when sending %v to %v\n", r.StatusCode, s, fwdUrl)
             } else {
-                log.Printf("Successfully (%v) sent to endpoint %v", r.StatusCode, fwdUrl)
+                log.Printf("Successfully (%v) sent to endpoint %v\n", r.StatusCode, fwdUrl)
             }
         }
     })
