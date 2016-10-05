@@ -27,6 +27,7 @@ var (
     graphitePrefix string = "coco.services"
     graphitePostfix string = "splunk-forwarder"
     graphiteServer string
+    counter = 0
     )
 
 
@@ -36,7 +37,7 @@ func main() {
         os.Exit(1) //If not fail visibly as we are unable to send logs to Splunk
     }
     
-	log.Println("Splunk forwarder: Started")
+	log.Printf("Splunk forwarder (%v workers): Started", workers)
 	defer log.Println("Splunk forwarder: Stopped")
     logChan := make(chan string)
 
@@ -60,7 +61,7 @@ func main() {
 	go queueLenMetrics(logChan)
 
 	for i := 0; i < workers; i++ {
-		log.Printf("Starting worker %v", i)
+		//log.Printf("Starting worker %v", i)
 		go func() {
 			for msg := range logChan {
                 if dryrun {
@@ -85,6 +86,8 @@ func main() {
 		} 
 		t := metrics.GetOrRegisterTimer("post.queue.latency", metrics.DefaultRegistry)
 		t.Time(func() {
+		  counter++
+		  log.Printf("Delivering event %v to logChan", counter)
 		  logChan <- str
 		})
 	}
