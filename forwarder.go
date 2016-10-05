@@ -12,6 +12,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"sync"
 	
 	"github.com/cyberdelia/go-metrics-graphite"
 	"github.com/rcrowley/go-metrics"
@@ -19,6 +20,7 @@ import (
 )
 
 var (
+    wg sync.WaitGroup
     client *http.Client
     fwdUrl string
     env string
@@ -27,7 +29,7 @@ var (
     graphitePrefix string = "coco.services"
     graphitePostfix string = "splunk-forwarder"
     graphiteServer string
-    counter = 0
+    chan_buffer int
     )
 
 
@@ -37,10 +39,9 @@ func main() {
         os.Exit(1) //If not fail visibly as we are unable to send logs to Splunk
     }
     
-	log.Printf("Splunk forwarder (%v workers): Started\n", workers)
+	log.Printf("Splunk forwarder (workers %v, buffer size %v): Started\n", workers, chan_buffer)
 	defer log.Printf("Splunk forwarder: Stopped\n")
-    logChan := make(chan string, 256)
-    //logChan := make(chan string)
+    logChan := make(chan string, chan_buffer)
 
     hostname, err := os.Hostname() //host name reported by the kernel, used for graphiteNamespace
     if err != nil {
@@ -62,8 +63,9 @@ func main() {
 	go queueLenMetrics(logChan)
 
 	for i := 0; i < workers; i++ {
-		//log.Printf("Starting worker %v", i)
+		wg.Add(1)
 		go func() {
+            defer wg.Done()	
 			for msg := range logChan {
                 if dryrun {
                     log.Printf("Dryrun enabled, not posting to %v\n", fwdUrl)
@@ -80,16 +82,15 @@ func main() {
 
 		if err != nil {
 			if err == io.EOF {
-                time.Sleep(10 * time.Second)
 				close(logChan)
+				log.Printf("Waiting buffered channel consumer to finish processing messages\n")
+                wg.Wait()
 				return
 			}
 			log.Fatal(err)
 		} 
 		t := metrics.GetOrRegisterTimer("post.queue.latency", metrics.DefaultRegistry)
 		t.Time(func() {
-		  counter++
-		  log.Printf("Delivering event %v to logChan\n", counter)
 		  logChan <- str
 		})
 	}
@@ -107,19 +108,14 @@ func queueLenMetrics(queue chan string) {
 func postToSplunk(s string) {
     t := metrics.GetOrRegisterTimer("post.time", metrics.DefaultRegistry)
     t.Time(func() {
-        log.Printf("Posting event to splunk\n")
         r, err := client.Post(fwdUrl, "application/json", strings.NewReader(s))
         if err != nil {
-            log.Printf("Error posting event to splunk\n")
             log.Println(err)
         } else {
-            log.Printf("Processing HTTP response code %v", r.StatusCode)
             defer r.Body.Close()
             io.Copy(ioutil.Discard, r.Body)
             if r.StatusCode != 200 {
                 log.Printf("Unexpected status code %v when sending %v to %v\n", r.StatusCode, s, fwdUrl)
-            } else {
-                log.Printf("Successfully (%v) sent to endpoint %v\n", r.StatusCode, fwdUrl)
             }
         }
     })
@@ -138,5 +134,6 @@ func init() {
 	flag.StringVar(&graphiteServer, "graphiteserver", "graphite.ft.com:2003", "Graphite server host name and port")
 	flag.BoolVar(&dryrun, "dryrun", false, "Dryrun true disables network connectivity. Use it for testing offline. Default value false")
 	flag.IntVar(&workers, "workers", 8, "Number of concurrent workers")
+	flag.IntVar(&chan_buffer, "buffer", 256, "Channel buffer size")
 	flag.Parse()
 }
