@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 	"sync"
-	
+
 	"github.com/cyberdelia/go-metrics-graphite"
 	"github.com/rcrowley/go-metrics"
 
@@ -30,24 +30,31 @@ var (
     graphitePostfix string = "splunk-forwarder"
     graphiteServer string
     chan_buffer int
+		hostname string
     )
 
 
 func main() {
-    if len(fwdUrl) == 0 { //Check whether -url parameter was provided 
+    if len(fwdUrl) == 0 { //Check whether -url parameter was provided
         log.Printf("-url=http_endpoint parameter must be provided\n")
         os.Exit(1) //If not fail visibly as we are unable to send logs to Splunk
     }
-    
-	log.Printf("Splunk forwarder (workers %v, buffer size %v): Started\n", workers, chan_buffer)
-	defer log.Printf("Splunk forwarder: Stopped\n")
+
+		log.Printf("Splunk forwarder (workers %v, buffer size %v): Started\n", workers, chan_buffer)
+		defer log.Printf("Splunk forwarder: Stopped\n")
     logChan := make(chan string, chan_buffer)
 
-    hostname, err := os.Hostname() //host name reported by the kernel, used for graphiteNamespace
-    if err != nil {
-        log.Println(err)
-    }
-    graphiteNamespace := strings.Join([]string{graphitePrefix, env, graphitePostfix, hostname}, ".") // Join prefix, env and postfix
+		if len(hostname) == 0 { //Check whether -hostname parameter was provided. If not attempt to resolve
+    	hname, err := os.Hostname() //host name reported by the kernel, used for graphiteNamespace
+    	if err != nil {
+      	log.Println(err)
+				hostname="unkownhost" //Set host name as unkownhost if hostname resolution fail
+    	} else {
+				hostname = hname
+			}
+		}
+
+    graphiteNamespace := strings.Join([]string{graphitePrefix, env, graphitePostfix, hostname}, ".") // graphiteNamespace ~ prefix.env.postfix.hostname
     log.Printf("%v namespace: %v\n", graphiteServer, graphiteNamespace)
     if dryrun {
         log.Printf("Dryrun enabled, not connecting to %v\n", graphiteServer)
@@ -56,22 +63,22 @@ func main() {
         if err != nil {
             log.Println(err)
         }
-        go graphite.Graphite(metrics.DefaultRegistry, 5*time.Second, graphitePrefix, addr)        
+    go graphite.Graphite(metrics.DefaultRegistry, 5*time.Second, graphiteNamespace, addr)
     }
     go metrics.Log(metrics.DefaultRegistry, 5*time.Second, log.New(os.Stdout, "metrics ", log.Lmicroseconds))
-    
-	go queueLenMetrics(logChan)
 
-	for i := 0; i < workers; i++ {
-		wg.Add(1)
-		go func() {
-            defer wg.Done()	
-			for msg := range logChan {
-                if dryrun {
-                    log.Printf("Dryrun enabled, not posting to %v\n", fwdUrl)
-                } else {
-                    postToSplunk(msg)   
-                }
+		go queueLenMetrics(logChan)
+
+		for i := 0; i < workers; i++ {
+			wg.Add(1)
+			go func() {
+      	defer wg.Done()
+				for msg := range logChan {
+					if dryrun {
+          	log.Printf("Dryrun enabled, not posting to %v\n", fwdUrl)
+					} else {
+						postToSplunk(msg)
+          }
 			}
 		}()
 	}
@@ -88,7 +95,7 @@ func main() {
 				return
 			}
 			log.Fatal(err)
-		} 
+		}
 		t := metrics.GetOrRegisterTimer("post.queue.latency", metrics.DefaultRegistry)
 		t.Time(func() {
 		  logChan <- str
@@ -128,12 +135,13 @@ func init() {
 		MaxIdleConnsPerHost: workers,
 	}
 	client = &http.Client{Transport: transport}
-    
+
 	flag.StringVar(&fwdUrl, "url", "", "The url to forward to")
 	flag.StringVar(&env, "env", "dummy", "environment_tag value")
 	flag.StringVar(&graphiteServer, "graphiteserver", "graphite.ft.com:2003", "Graphite server host name and port")
 	flag.BoolVar(&dryrun, "dryrun", false, "Dryrun true disables network connectivity. Use it for testing offline. Default value false")
 	flag.IntVar(&workers, "workers", 8, "Number of concurrent workers")
 	flag.IntVar(&chan_buffer, "buffer", 256, "Channel buffer size")
+	flag.StringVar(&hostname, "hostname", "", "Hostname running the service. If empty Go is trying to resolve the hostname.")
 	flag.Parse()
 }
