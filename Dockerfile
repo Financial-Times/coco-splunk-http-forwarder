@@ -12,4 +12,4 @@ RUN apk --update add go git\
   && apk del go git \
   && rm -rf $GOPATH /var/cache/apk/*
 
-CMD /coco-splunk-http-forwarder -url=$FORWARD_URL -env=$ENV -hostname=$HOSTNAME
+CMD /coco-splunk-http-forwarder -url=$FORWARD_URL -env=$ENV -hostname=$HOSTNAME -workers=$WORKERS
