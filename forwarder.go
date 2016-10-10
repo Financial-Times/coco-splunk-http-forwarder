@@ -30,11 +30,17 @@ var (
 	graphiteServer  string
 	chanBuffer      int
 	hostname        string
+	token           string
+	batchsize       int
 )
 
 func main() {
-	if len(fwdURL) == 0 { //Check whether -url parameter was provided
+	if len(fwdURL) == 0 { //Check whether -url parameter value was provided
 		log.Printf("-url=http_endpoint parameter must be provided\n")
+		os.Exit(1) //If not fail visibly as we are unable to send logs to Splunk
+	}
+	if len(token) == 0 { //Check whether -token parameter value was provided
+		log.Printf("-token=secret must be provided\n")
 		os.Exit(1) //If not fail visibly as we are unable to send logs to Splunk
 	}
 
@@ -82,6 +88,8 @@ func main() {
 	}
 
 	br := bufio.NewReader(os.Stdin)
+	i := 0
+	eventlist := make([]string, batchsize) //create slice size of batchsize
 	for {
 		str, err := br.ReadString('\n')
 
@@ -94,10 +102,17 @@ func main() {
 			}
 			log.Fatal(err)
 		}
-		t := metrics.GetOrRegisterTimer("post.queue.latency", metrics.DefaultRegistry)
-		t.Time(func() {
-			logChan <- str
-		})
+		if i >= batchsize {
+			jsonSTRING := writeJSON(eventlist)
+			t := metrics.GetOrRegisterTimer("post.queue.latency", metrics.DefaultRegistry)
+			t.Time(func() {
+				logChan <- jsonSTRING
+			})
+			i = 0 //reset i once batchsize is reached
+		} else {
+			eventlist[i] = str
+			i++ //increment i
+		}
 	}
 }
 
@@ -113,17 +128,30 @@ func queueLenMetrics(queue chan string) {
 func postToSplunk(s string) {
 	t := metrics.GetOrRegisterTimer("post.time", metrics.DefaultRegistry)
 	t.Time(func() {
-		r, err := client.Post(fwdURL, "application/json", strings.NewReader(s))
+		req, err := http.NewRequest("POST", fwdURL, strings.NewReader(s))
+		if err != nil {
+			log.Println(err)
+		}
+		tokenWithKeyword := strings.Join([]string{"Splunk", token}, " ") //join strings "Splunk" and value of -token argument
+		req.Header.Set("Authorization", tokenWithKeyword)
+		r, err := client.Do(req)
 		if err != nil {
 			log.Println(err)
 		} else {
 			defer r.Body.Close()
 			io.Copy(ioutil.Discard, r.Body)
 			if r.StatusCode != 200 {
-				log.Printf("Unexpected status code %v when sending %v to %v\n", r.StatusCode, s, fwdURL)
+				log.Printf("Unexpected status code %v (%v) when sending %v to %v\n", r.StatusCode, r.Status, s, fwdURL)
 			}
 		}
 	})
+}
+func writeJSON(eventlist []string) string {
+	jsonPREFIX := "{ \"event\":"
+	jsonPOSTFIX := "}"
+	jsonDOC := strings.Join(eventlist, "} { \"event\":")
+	jsonDOC = strings.Join([]string{jsonPREFIX, jsonDOC, jsonPOSTFIX}, " ")
+	return jsonDOC
 }
 
 func init() {
@@ -141,5 +169,7 @@ func init() {
 	flag.IntVar(&workers, "workers", 8, "Number of concurrent workers")
 	flag.IntVar(&chanBuffer, "buffer", 256, "Channel buffer size")
 	flag.StringVar(&hostname, "hostname", "", "Hostname running the service. If empty Go is trying to resolve the hostname.")
+	flag.StringVar(&token, "token", "", "Splunk HEC Authorization token")
+	flag.IntVar(&batchsize, "batchsize", 10, "Number of messages to group before delivering to Splunk HEC")
 	flag.Parse()
 }
