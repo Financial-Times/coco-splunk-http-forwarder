@@ -95,7 +95,6 @@ func main() {
 	go func() {                    //Create go routine for timer that writes into timerChan when it expires
 		for {
 			<-timer.C
-			log.Println("Sending event to timerChan")
 			timerChan <- true
 		}
 	}()
@@ -111,7 +110,6 @@ func main() {
 			break
 		}
 		if i >= batchsize { //Trigger delivery if batchsize is exceeded
-			log.Println("batchsize exceed. Flush logs")
 			writeToLogChan(eventlist, logChan)
 			i = 0 //reset i once batchsize is reached
 			eventlist = nil
