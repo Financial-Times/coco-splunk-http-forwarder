@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cyberdelia/go-metrics-graphite"
+	graphite "github.com/cyberdelia/go-metrics-graphite"
 	"github.com/rcrowley/go-metrics"
 )
 
@@ -32,6 +32,8 @@ var (
 	hostname        string
 	token           string
 	batchsize       int
+	batchtimer      int
+	timerChan       = make(chan bool)
 )
 
 func main() {
@@ -43,11 +45,6 @@ func main() {
 		log.Printf("-token=secret must be provided\n")
 		os.Exit(1) //If not fail visibly as we are unable to send logs to Splunk
 	}
-
-	log.Printf("Splunk forwarder (workers %v, buffer size %v): Started\n", workers, chanBuffer)
-	defer log.Printf("Splunk forwarder: Stopped\n")
-	logChan := make(chan string, chanBuffer)
-
 	if len(hostname) == 0 { //Check whether -hostname parameter was provided. If not attempt to resolve
 		hname, err := os.Hostname() //host name reported by the kernel, used for graphiteNamespace
 		if err != nil {
@@ -57,6 +54,10 @@ func main() {
 			hostname = hname
 		}
 	}
+
+	log.Printf("Splunk forwarder (workers %v, buffer size %v, batchsize %v, batchtimer %v): Started\n", workers, chanBuffer, batchsize, batchtimer)
+	defer log.Printf("Splunk forwarder: Stopped\n")
+	logChan := make(chan string, chanBuffer)
 
 	graphiteNamespace := strings.Join([]string{graphitePrefix, env, graphitePostfix, hostname}, ".") // graphiteNamespace ~ prefix.env.postfix.hostname
 	log.Printf("%v namespace: %v\n", graphiteServer, graphiteNamespace)
@@ -70,7 +71,6 @@ func main() {
 		go graphite.Graphite(metrics.DefaultRegistry, 5*time.Second, graphiteNamespace, addr)
 	}
 	go metrics.Log(metrics.DefaultRegistry, 5*time.Second, log.New(os.Stdout, "metrics ", log.Lmicroseconds))
-
 	go queueLenMetrics(logChan)
 
 	for i := 0; i < workers; i++ {
@@ -89,12 +89,44 @@ func main() {
 
 	br := bufio.NewReader(os.Stdin)
 	i := 0
-	eventlist := make([]string, batchsize) //create slice size of batchsize
-	for {
-		str, err := br.ReadString('\n')
+	eventlist := make([]string, batchsize) //create eventlist slice that is size of -batchsize
+	timerd := time.Duration(batchtimer) * time.Second
+	timer := time.NewTimer(timerd) //create timer object with duration specified by -batchtimer
+	go func() {                    //Create go routine for timer that writes into timerChan when it expires
+		for {
+			<-timer.C
+			log.Println("Sending event to timerChan")
+			timerChan <- true
+		}
+	}()
 
+	for {
+		//1. Check whether timer has expired or batchsize exceeded before processing new string
+		select { //set i equal to batchsize to trigger delivery if timer expires prior to batchsize limit is exceeded
+		case <-timerChan:
+			log.Println("Timer expired. Trigger delivery to Splunk")
+			eventlist = stripEmptyStrings(eventlist) //remove empty values from slice before writing to channel
+			i = batchsize
+		default:
+			break
+		}
+		if i >= batchsize { //Trigger delivery if batchsize is exceeded
+			log.Println("batchsize exceed. Flush logs")
+			writeToLogChan(eventlist, logChan)
+			i = 0 //reset i once batchsize is reached
+			eventlist = nil
+			eventlist = make([]string, batchsize)
+			timer.Reset(timerd) //Reset timer after message delivery
+		}
+		//2. Process new string after ensuring eventlist has sufficient space
+		str, err := br.ReadString('\n')
 		if err != nil {
-			if err == io.EOF {
+			if err == io.EOF { //Shutdown procedures: process eventlist, close channel and workers
+				eventlist = stripEmptyStrings(eventlist) //remove empty values from slice before writing to channel
+				if len(eventlist) > 0 {
+					log.Printf("Processing %v batched messages before exit", len(eventlist))
+					writeToLogChan(eventlist, logChan)
+				}
 				close(logChan)
 				log.Printf("Waiting buffered channel consumer to finish processing messages\n")
 				wg.Wait()
@@ -102,16 +134,11 @@ func main() {
 			}
 			log.Fatal(err)
 		}
-		if i >= batchsize {
-			jsonSTRING := writeJSON(eventlist)
-			t := metrics.GetOrRegisterTimer("post.queue.latency", metrics.DefaultRegistry)
-			t.Time(func() {
-				logChan <- jsonSTRING
-			})
-			i = 0 //reset i once batchsize is reached
-		} else {
+
+		//3. Append event on eventlist
+		if i != batchsize {
 			eventlist[i] = str
-			i++ //increment i
+			i++
 		}
 	}
 }
@@ -146,12 +173,43 @@ func postToSplunk(s string) {
 		}
 	})
 }
+
+func stripEmptyStrings(eventlist []string) []string {
+	//Find empty values in slice. Using map remove empties and return a slice without empty values
+	i := 0
+	map1 := make(map[int]string)
+	for _, v := range eventlist {
+		if v != "" {
+			map1[i] = v
+			i++
+		}
+	}
+	mapToSlice := make([]string, len(map1))
+	i = 0
+	for _, v := range map1 {
+		mapToSlice[i] = v
+		i++
+	}
+	return mapToSlice
+}
+
 func writeJSON(eventlist []string) string {
+	//Function produces Splunk HEC compatible json document for batched eventss
+	// Example: { "event": "event 1"} { "event": "event 2"}
 	jsonPREFIX := "{ \"event\":"
 	jsonPOSTFIX := "}"
 	jsonDOC := strings.Join(eventlist, "} { \"event\":")
 	jsonDOC = strings.Join([]string{jsonPREFIX, jsonDOC, jsonPOSTFIX}, " ")
 	return jsonDOC
+}
+
+func writeToLogChan(eventlist []string, logChan chan string) {
+	jsonSTRING := writeJSON(eventlist)
+	t := metrics.GetOrRegisterTimer("post.queue.latency", metrics.DefaultRegistry)
+	t.Time(func() {
+		//log.Printf("Sending document to channel: %v", jsonSTRING)
+		logChan <- jsonSTRING
+	})
 }
 
 func init() {
@@ -171,5 +229,7 @@ func init() {
 	flag.StringVar(&hostname, "hostname", "", "Hostname running the service. If empty Go is trying to resolve the hostname.")
 	flag.StringVar(&token, "token", "", "Splunk HEC Authorization token")
 	flag.IntVar(&batchsize, "batchsize", 10, "Number of messages to group before delivering to Splunk HEC")
+	flag.IntVar(&batchtimer, "batchtimer", 5, "Expiry in seconds after which delivering events to Splunk HEC")
+
 	flag.Parse()
 }
