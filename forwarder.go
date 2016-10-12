@@ -202,12 +202,14 @@ func writeJSON(eventlist []string) string {
 }
 
 func writeToLogChan(eventlist []string, logChan chan string) {
-	jsonSTRING := writeJSON(eventlist)
-	t := metrics.GetOrRegisterTimer("post.queue.latency", metrics.DefaultRegistry)
-	t.Time(func() {
-		//log.Printf("Sending document to channel: %v", jsonSTRING)
-		logChan <- jsonSTRING
-	})
+	if len(eventlist) > 0 { //only attempt delivery if eventlist contains elements
+		jsonSTRING := writeJSON(eventlist)
+		t := metrics.GetOrRegisterTimer("post.queue.latency", metrics.DefaultRegistry)
+		t.Time(func() {
+			//log.Printf("Sending document to channel: %v", jsonSTRING)
+			logChan <- jsonSTRING
+		})
+	}
 }
 
 func init() {
