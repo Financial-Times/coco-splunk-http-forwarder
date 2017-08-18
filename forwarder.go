@@ -3,13 +3,16 @@ package main
 import (
 	"bufio"
 	"crypto/tls"
+	"encoding/json"
 	"flag"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -192,13 +195,50 @@ func stripEmptyStrings(eventlist []string) []string {
 }
 
 func writeJSON(eventlist []string) string {
-	//Function produces Splunk HEC compatible json document for batched eventss
+	//Function produces Splunk HEC compatible json document for batched events
 	// Example: { "event": "event 1"} { "event": "event 2"}
-	jsonPREFIX := "{ \"event\":"
-	jsonPOSTFIX := "}"
-	jsonDOC := strings.Join(eventlist, "} { \"event\":")
-	jsonDOC = strings.Join([]string{jsonPREFIX, jsonDOC, jsonPOSTFIX}, " ")
-	return jsonDOC
+
+	var jsonDoc string
+
+	for _, e := range eventlist {
+		var err error
+		var matches []string
+
+		if timestampRegex == nil {
+			matches = []string{}
+		} else {
+			matches = timestampRegex.FindStringSubmatch(e)
+		}
+
+		t := time.Now()
+		if len(matches) > 0 {
+			for _, match := range matches {
+				t, err = time.Parse(time.RFC3339, match)
+				if err != nil {
+					t = time.Now()
+				} else {
+					break
+				}
+			}
+		}
+
+		item := struct {
+			Event string `json:"event"`
+			Time  int64  `json:"time"`
+		}{
+			Event: e,
+			Time:  t.Unix(),
+		}
+
+		jsonItem, err := json.Marshal(&item)
+		if err != nil {
+			jsonDoc = strings.Join([]string{jsonDoc, e}, " ")
+		} else {
+			jsonDoc = strings.Join([]string{jsonDoc, string(jsonItem)}, " ")
+		}
+	}
+	fmt.Println(jsonDoc)
+	return jsonDoc
 }
 
 func writeToLogChan(eventlist []string, logChan chan string) {
@@ -212,6 +252,8 @@ func writeToLogChan(eventlist []string, logChan chan string) {
 	}
 }
 
+var timestampRegex *regexp.Regexp
+
 func init() {
 	tlsConfig := &tls.Config{InsecureSkipVerify: true}
 	transport := &http.Transport{
@@ -219,15 +261,16 @@ func init() {
 		MaxIdleConnsPerHost: workers,
 	}
 	client = &http.Client{Transport: transport}
+	timestampRegex, _ = regexp.Compile("([0-9]+)-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])[Tt]([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9]|60)(.[0-9]+)?(([Zz])|([+|-]([01][0-9]|2[0-3]):[0-5][0-9]))")
 
-	flag.StringVar(&fwdURL, "url", "", "The url to forward to")
+	flag.StringVar(&fwdURL, "url", "http://localhost:8080", "The url to forward to")
 	flag.StringVar(&env, "env", "dummy", "environment_tag value")
 	flag.StringVar(&graphiteServer, "graphiteserver", "graphite.ft.com:2003", "Graphite server host name and port")
 	flag.BoolVar(&dryrun, "dryrun", false, "Dryrun true disables network connectivity. Use it for testing offline. Default value false")
 	flag.IntVar(&workers, "workers", 8, "Number of concurrent workers")
 	flag.IntVar(&chanBuffer, "buffer", 256, "Channel buffer size")
 	flag.StringVar(&hostname, "hostname", "", "Hostname running the service. If empty Go is trying to resolve the hostname.")
-	flag.StringVar(&token, "token", "", "Splunk HEC Authorization token")
+	flag.StringVar(&token, "token", "fake-token", "Splunk HEC Authorization token")
 	flag.IntVar(&batchsize, "batchsize", 10, "Number of messages to group before delivering to Splunk HEC")
 	flag.IntVar(&batchtimer, "batchtimer", 5, "Expiry in seconds after which delivering events to Splunk HEC")
 
