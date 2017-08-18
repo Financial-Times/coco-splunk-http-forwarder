@@ -37,6 +37,7 @@ var (
 	batchsize       int
 	batchtimer      int
 	timerChan       = make(chan bool)
+	timestampRegex  *regexp.Regexp
 )
 
 func main() {
@@ -237,7 +238,6 @@ func writeJSON(eventlist []string) string {
 			jsonDoc = strings.Join([]string{jsonDoc, string(jsonItem)}, " ")
 		}
 	}
-	fmt.Println(jsonDoc)
 	return jsonDoc
 }
 
@@ -252,8 +252,6 @@ func writeToLogChan(eventlist []string, logChan chan string) {
 	}
 }
 
-var timestampRegex *regexp.Regexp
-
 func init() {
 	tlsConfig := &tls.Config{InsecureSkipVerify: true}
 	transport := &http.Transport{
@@ -263,14 +261,14 @@ func init() {
 	client = &http.Client{Transport: transport}
 	timestampRegex, _ = regexp.Compile("([0-9]+)-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])[Tt]([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9]|60)(.[0-9]+)?(([Zz])|([+|-]([01][0-9]|2[0-3]):[0-5][0-9]))")
 
-	flag.StringVar(&fwdURL, "url", "http://localhost:8080", "The url to forward to")
+	flag.StringVar(&fwdURL, "url", "", "The url to forward to")
 	flag.StringVar(&env, "env", "dummy", "environment_tag value")
 	flag.StringVar(&graphiteServer, "graphiteserver", "graphite.ft.com:2003", "Graphite server host name and port")
 	flag.BoolVar(&dryrun, "dryrun", false, "Dryrun true disables network connectivity. Use it for testing offline. Default value false")
 	flag.IntVar(&workers, "workers", 8, "Number of concurrent workers")
 	flag.IntVar(&chanBuffer, "buffer", 256, "Channel buffer size")
 	flag.StringVar(&hostname, "hostname", "", "Hostname running the service. If empty Go is trying to resolve the hostname.")
-	flag.StringVar(&token, "token", "fake-token", "Splunk HEC Authorization token")
+	flag.StringVar(&token, "token", "", "Splunk HEC Authorization token")
 	flag.IntVar(&batchsize, "batchsize", 10, "Number of messages to group before delivering to Splunk HEC")
 	flag.IntVar(&batchtimer, "batchtimer", 5, "Expiry in seconds after which delivering events to Splunk HEC")
 
