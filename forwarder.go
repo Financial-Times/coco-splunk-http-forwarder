@@ -232,7 +232,7 @@ func writeJSON(eventlist []string) string {
 
 		jsonItem, err := json.Marshal(&item)
 		if err != nil {
-			jsonDoc = strings.Join([]string{jsonDoc, e}, " ")
+			jsonDoc = strings.Join([]string{jsonDoc, strings.Join([]string{"{ \"event\":", e, "}"}, "")}, " ")
 		} else {
 			jsonDoc = strings.Join([]string{jsonDoc, string(jsonItem)}, " ")
 		}
