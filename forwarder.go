@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"crypto/tls"
+	"encoding/json"
 	"flag"
 	"io"
 	"io/ioutil"
@@ -10,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -34,6 +36,7 @@ var (
 	batchsize       int
 	batchtimer      int
 	timerChan       = make(chan bool)
+	timestampRegex  = regexp.MustCompile("([0-9]+)-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])[Tt]([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9]|60)(.[0-9]+)?(([Zz])|([+|-]([01][0-9]|2[0-3]):[0-5][0-9]))")
 )
 
 func main() {
@@ -192,13 +195,31 @@ func stripEmptyStrings(eventlist []string) []string {
 }
 
 func writeJSON(eventlist []string) string {
-	//Function produces Splunk HEC compatible json document for batched eventss
+	//Function produces Splunk HEC compatible json document for batched events
 	// Example: { "event": "event 1"} { "event": "event 2"}
-	jsonPREFIX := "{ \"event\":"
-	jsonPOSTFIX := "}"
-	jsonDOC := strings.Join(eventlist, "} { \"event\":")
-	jsonDOC = strings.Join([]string{jsonPREFIX, jsonDOC, jsonPOSTFIX}, " ")
-	return jsonDOC
+	var jsonDoc string
+
+	for _, e := range eventlist {
+		timestamp := timestampRegex.FindStringSubmatch(e)
+
+		var err error
+		var t = time.Now()
+		if len(timestamp) > 0 {
+			t, err = time.Parse(time.RFC3339, timestamp[0])
+			if err != nil {
+				t = time.Now()
+			}
+		}
+
+		item := map[string]interface{}{"event": e, "time": t.Unix()}
+		jsonItem, err := json.Marshal(&item)
+		if err != nil {
+			jsonDoc = strings.Join([]string{jsonDoc, strings.Join([]string{"{ \"event\":", e, "}"}, "")}, " ")
+		} else {
+			jsonDoc = strings.Join([]string{jsonDoc, string(jsonItem)}, " ")
+		}
+	}
+	return jsonDoc
 }
 
 func writeToLogChan(eventlist []string, logChan chan string) {
