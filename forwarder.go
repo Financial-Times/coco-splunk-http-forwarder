@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -12,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -205,13 +207,17 @@ func writeJSON(eventlist []string) string {
 		var err error
 		var t = time.Now()
 		if len(timestamp) > 0 {
-			t, err = time.Parse(time.RFC3339, timestamp[0])
+			t, err = time.Parse(time.RFC3339Nano, timestamp[0])
 			if err != nil {
 				t = time.Now()
 			}
 		}
 
-		item := map[string]interface{}{"event": e, "time": t.Unix()}
+		epochMillis, err := strconv.ParseFloat(fmt.Sprintf("%d.%03d", t.Unix(), t.Nanosecond()/int(time.Millisecond)), 64)
+		if err != nil {
+			epochMillis = float64(t.Unix())
+		}
+		item := map[string]interface{}{"event": e, "time": epochMillis}
 		jsonItem, err := json.Marshal(&item)
 		if err != nil {
 			jsonDoc = strings.Join([]string{jsonDoc, strings.Join([]string{"{ \"event\":", e, "}"}, "")}, " ")
