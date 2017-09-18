@@ -1,6 +1,6 @@
 FROM golang:1.8.3-alpine
 
-ENV PROJECT=splunk-forwarder
+ENV PROJECT=coco-splunk-http-forwarder
 COPY . /${PROJECT}-sources/
 
 RUN apk --no-cache --virtual .build-dependencies add git \
