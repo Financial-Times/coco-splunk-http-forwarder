@@ -75,8 +75,8 @@ func main() {
 		}
 		go graphite.Graphite(metrics.DefaultRegistry, 5*time.Second, graphiteNamespace, addr)
 	}
-	// go metrics.Log(metrics.DefaultRegistry, 5*time.Second, log.New(os.Stdout, "metrics ", log.Lmicroseconds))
-	// go queueLenMetrics(logChan)
+	go metrics.Log(metrics.DefaultRegistry, 5*time.Second, log.New(os.Stdout, "metrics ", log.Lmicroseconds))
+	go queueLenMetrics(logChan)
 
 	for i := 0; i < workers; i++ {
 		wg.Add(1)
@@ -158,7 +158,6 @@ func queueLenMetrics(queue chan string) {
 func postToSplunk(s string) {
 	t := metrics.GetOrRegisterTimer("post.time", metrics.DefaultRegistry)
 	t.Time(func() {
-		log.Println(s)
 		req, err := http.NewRequest("POST", fwdURL, strings.NewReader(s))
 		if err != nil {
 			log.Println(err)
