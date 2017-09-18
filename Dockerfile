@@ -1,15 +1,21 @@
-FROM gliderlabs/alpine:3.4
+FROM golang:1.8.3-alpine
 
-ADD . /splunk-http-forwarder
-RUN apk --update add go git\
-  && export GOPATH=/.gopath \
-  && go get github.com/Financial-Times/coco-splunk-http-forwarder \
-  && go get github.com/cyberdelia/go-metrics-graphite \
-  && go get github.com/rcrowley/go-metrics \
-  && cd splunk-http-forwarder \
+ENV PROJECT=splunk-forwarder
+COPY . /${PROJECT}-sources/
+
+RUN apk --no-cache --virtual .build-dependencies add git \
+  && ORG_PATH="github.com/Financial-Times" \
+  && REPO_PATH="${ORG_PATH}/${PROJECT}" \
+  && mkdir -p $GOPATH/src/${ORG_PATH} \
+  && ln -s /${PROJECT}-sources $GOPATH/src/${REPO_PATH} \
+  && cd $GOPATH/src/${REPO_PATH} \
+  && echo "Fetching dependencies..." \
+  && go get . \
   && go build \
-  && mv splunk-http-forwarder /coco-splunk-http-forwarder \
-  && apk del go git \
+  && mv ${PROJECT} /${PROJECT} \
+  && apk del .build-dependencies \
   && rm -rf $GOPATH /var/cache/apk/*
+
+WORKDIR /
 
 CMD exec /coco-splunk-http-forwarder -url=$FORWARD_URL -env=$ENV -hostname=$HOSTNAME -workers=$WORKERS -buffer=$BUFFER -token=$TOKEN -batchsize=$BATCHSIZE -batchtimer=$BATCHTIMER
