@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -12,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -205,13 +207,19 @@ func writeJSON(eventlist []string) string {
 		var err error
 		var t = time.Now()
 		if len(timestamp) > 0 {
-			t, err = time.Parse(time.RFC3339, timestamp[0])
+			t, err = time.Parse(time.RFC3339Nano, timestamp[0])
 			if err != nil {
 				t = time.Now()
 			}
 		}
 
-		item := map[string]interface{}{"event": e, "time": t.Unix()}
+		// For Splunk HEC, the default time format is epoch time format, in the format <sec>.<ms>.
+		// For example, 1433188255.500 indicates 1433188255 seconds and 500 milliseconds after epoch, or Monday, June 1, 2015, at 7:50:55 PM GMT.
+		epochMillis, err := strconv.ParseFloat(fmt.Sprintf("%d.%03d", t.Unix(), t.Nanosecond()/int(time.Millisecond)), 64)
+		if err != nil {
+			epochMillis = float64(t.UnixNano()) / float64(time.Second)
+		}
+		item := map[string]interface{}{"event": e, "time": epochMillis}
 		jsonItem, err := json.Marshal(&item)
 		if err != nil {
 			jsonDoc = strings.Join([]string{jsonDoc, strings.Join([]string{"{ \"event\":", e, "}"}, "")}, " ")
