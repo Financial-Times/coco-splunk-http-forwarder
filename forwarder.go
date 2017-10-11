@@ -221,7 +221,7 @@ func writeJSON(eventlist []string) string {
 		if err != nil {
 			epochMillis = float64(t.UnixNano()) / float64(time.Second)
 		}
-		item := map[string]interface{}{"event": e, "time": epochMillis, "index":e_index, "sourceType":"upp"}
+		item := map[string]interface{}{"event": e, "time": epochMillis, "index": e_index, "sourcetype": "upp"}
 		jsonItem, err := json.Marshal(&item)
 		if err != nil {
 			jsonDoc = strings.Join([]string{jsonDoc, strings.Join([]string{"{ \"event\":", e, "}"}, "")}, " ")
