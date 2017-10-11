@@ -204,6 +204,8 @@ func writeJSON(eventlist []string) string {
 	for _, e := range eventlist {
 		timestamp := timestampRegex.FindStringSubmatch(e)
 
+		e_index := determineIndex(e)
+
 		var err error
 		var t = time.Now()
 		if len(timestamp) > 0 {
@@ -219,7 +221,7 @@ func writeJSON(eventlist []string) string {
 		if err != nil {
 			epochMillis = float64(t.UnixNano()) / float64(time.Second)
 		}
-		item := map[string]interface{}{"event": e, "time": epochMillis}
+		item := map[string]interface{}{"event": e, "time": epochMillis, "index":e_index, "sourceType":"upp"}
 		jsonItem, err := json.Marshal(&item)
 		if err != nil {
 			jsonDoc = strings.Join([]string{jsonDoc, strings.Join([]string{"{ \"event\":", e, "}"}, "")}, " ")
@@ -228,6 +230,26 @@ func writeJSON(eventlist []string) string {
 		}
 	}
 	return jsonDoc
+}
+
+func determineIndex(event string) interface{} {
+
+	//check the environment and if it's monitoring log or not
+	index := ""
+
+	envRegex := regexp.MustCompile("\"environment\":\"(pub-)?(\\w*)")
+	m := envRegex.FindStringSubmatch(event)
+
+	if len(m) >= 2 {
+		index = m[2]
+	}
+
+	monRegex := regexp.MustCompile("\"monitoring_event\":\"true\"")
+	if monRegex.FindString(event)!="" {
+		index = fmt.Sprintf("%s_mon",index)
+	}
+
+	return index
 }
 
 func writeToLogChan(eventlist []string, logChan chan string) {
