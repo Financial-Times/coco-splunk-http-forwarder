@@ -37,8 +37,12 @@ var (
 	token           string
 	batchsize       int
 	batchtimer      int
+	bucket          string
+	br              *bufio.Reader
 	timerChan       = make(chan bool)
 	timestampRegex  = regexp.MustCompile("([0-9]+)-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])[Tt]([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9]|60)(.[0-9]+)?(([Zz])|([+|-]([01][0-9]|2[0-3]):[0-5][0-9]))")
+	status          = serviceStatus{healthy: false, timestamp: time.Now()}
+	logRetry        Retry
 )
 
 func main() {
@@ -58,6 +62,10 @@ func main() {
 		} else {
 			hostname = hname
 		}
+	}
+	if len(bucket) == 0 { //Check whether -bucket parameter value was provided
+		log.Printf("-bucket=bucket_name\n")
+		os.Exit(1) //If not fail visibly as we are unable to send logs to Splunk
 	}
 
 	log.Printf("Splunk forwarder (workers %v, buffer size %v, batchsize %v, batchtimer %v): Started\n", workers, chanBuffer, batchsize, batchtimer)
@@ -92,7 +100,9 @@ func main() {
 		}()
 	}
 
-	br := bufio.NewReader(os.Stdin)
+	if br == nil {
+		br = bufio.NewReader(os.Stdin)
+	}
 	i := 0
 	eventlist := make([]string, batchsize) //create eventlist slice that is size of -batchsize
 	timerd := time.Duration(batchtimer) * time.Second
@@ -103,6 +113,9 @@ func main() {
 			timerChan <- true
 		}
 	}()
+
+	logRetry = NewRetry(postToSplunk, isHealthy, bucket)
+	logRetry.Start()
 
 	for {
 		//1. Check whether timer has expired or batchsize exceeded before processing new string
@@ -165,16 +178,34 @@ func postToSplunk(s string) {
 		tokenWithKeyword := strings.Join([]string{"Splunk", token}, " ") //join strings "Splunk" and value of -token argument
 		req.Header.Set("Authorization", tokenWithKeyword)
 		r, err := client.Do(req)
+		status.timestamp = time.Now()
 		if err != nil {
 			log.Println(err)
+			cacheForRetry(s)
+			status.healthy = false
 		} else {
 			defer r.Body.Close()
 			io.Copy(ioutil.Discard, r.Body)
 			if r.StatusCode != 200 {
+				status.healthy = false
 				log.Printf("Unexpected status code %v (%v) when sending %v to %v\n", r.StatusCode, r.Status, s, fwdURL)
+				cacheForRetry(s)
+			} else {
+				status.healthy = true
 			}
 		}
 	})
+}
+
+func cacheForRetry(s string) {
+	err := logRetry.Enqueue(s)
+	if err != nil {
+		log.Printf("Unexpected error when caching failed messages: %v\n", err)
+	}
+}
+
+func isHealthy() serviceStatus {
+	return status
 }
 
 func stripEmptyStrings(eventlist []string) []string {
@@ -259,6 +290,7 @@ func init() {
 	flag.StringVar(&token, "token", "", "Splunk HEC Authorization token")
 	flag.IntVar(&batchsize, "batchsize", 10, "Number of messages to group before delivering to Splunk HEC")
 	flag.IntVar(&batchtimer, "batchtimer", 5, "Expiry in seconds after which delivering events to Splunk HEC")
+	flag.StringVar(&bucket, "bucket", "", "S3 bucket for caching failed events")
 
 	flag.Parse()
 }
