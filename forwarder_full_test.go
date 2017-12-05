@@ -108,7 +108,7 @@ func Test_Forwarder(t *testing.T) {
 		}
 	}
 	out.Close()
-	time.Sleep(3 * time.Second)
+	time.Sleep(2 * time.Second)
 	assert.Equal(t, messageCount/batchsize, len(splunk.index))
 	assert.Equal(t, 1, splunk.errorCount)
 	assert.Contains(t, strings.Join(splunk.index, ""), "simulated_retry")

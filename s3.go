@@ -70,7 +70,13 @@ func (s *s3Service) ListAndDelete() ([]string, error) {
 	vals := []string{}
 	for _, obj := range out.Contents {
 		ids = append(ids, &s3.ObjectIdentifier{Key: obj.Key})
-		vals = append(vals, obj.String())
+
+		val, err := s.Get(*obj.Key)
+		if err != nil {
+			return nil, err
+		}
+
+		vals = append(vals, val)
 	}
 
 	_, err = s.svc.DeleteObjects(&s3.DeleteObjectsInput{
@@ -92,4 +98,19 @@ func (s *s3Service) Put(obj string) error {
 		Body:   strings.NewReader(obj),
 		Key:    &uuid})
 	return err
+}
+
+func (s *s3Service) Get(key string) (string, error) {
+	val, err := s.svc.GetObject(&s3.GetObjectInput{
+		Bucket: &s.bucketName,
+		Key:    &key,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	defer val.Body.Close()
+	buf := make([]byte, *val.ContentLength)
+	val.Body.Read(buf)
+	return string(buf), nil
 }
