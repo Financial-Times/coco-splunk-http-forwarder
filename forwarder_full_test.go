@@ -86,7 +86,7 @@ func TestMain(m *testing.M) {
 
 	flag.Parse()
 
-	NewS3Service = func(string) (S3Service, error) {
+	NewS3Service = func(string, string) (S3Service, error) {
 		return &s3ServiceMock{}, nil
 	}
 

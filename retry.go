@@ -24,8 +24,8 @@ type retry struct {
 	cache         S3Service
 }
 
-func NewRetry(action func(string), statusChecker func() serviceStatus, bucketName string) Retry {
-	svc, _ := NewS3Service(bucketName)
+func NewRetry(action func(string), statusChecker func() serviceStatus, bucketName string, awsRegion string) Retry {
+	svc, _ := NewS3Service(bucketName, awsRegion)
 	return retry{action, statusChecker, svc}
 }
 

@@ -38,6 +38,7 @@ var (
 	batchsize       int
 	batchtimer      int
 	bucket          string
+	awsRegion       string
 	br              *bufio.Reader
 	timerChan       = make(chan bool)
 	timestampRegex  = regexp.MustCompile("([0-9]+)-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])[Tt]([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9]|60)(.[0-9]+)?(([Zz])|([+|-]([01][0-9]|2[0-3]):[0-5][0-9]))")
@@ -114,7 +115,7 @@ func main() {
 		}
 	}()
 
-	logRetry = NewRetry(postToSplunk, isHealthy, bucket)
+	logRetry = NewRetry(postToSplunk, isHealthy, bucket, awsRegion)
 	logRetry.Start()
 
 	for {
@@ -290,7 +291,8 @@ func init() {
 	flag.StringVar(&token, "token", "", "Splunk HEC Authorization token")
 	flag.IntVar(&batchsize, "batchsize", 10, "Number of messages to group before delivering to Splunk HEC")
 	flag.IntVar(&batchtimer, "batchtimer", 5, "Expiry in seconds after which delivering events to Splunk HEC")
-	flag.StringVar(&bucket, "bucket", "", "S3 bucket for caching failed events")
+	flag.StringVar(&bucket, "bucketName", "", "S3 bucket for caching failed events")
+	flag.StringVar(&awsRegion, "awsRegion", "", "AWS region for S3")
 
 	flag.Parse()
 }

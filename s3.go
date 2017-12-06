@@ -24,10 +24,9 @@ type s3Service struct {
 	svc        *s3.S3
 }
 
-var NewS3Service = func(bucketName string) (S3Service, error) {
+var NewS3Service = func(bucketName string, awsRegion string) (S3Service, error) {
 	wrks := 2
 	spareWorkers := 1
-	awsRegion := "eu-west-1"
 
 	hc := &http.Client{
 		Transport: &http.Transport{
