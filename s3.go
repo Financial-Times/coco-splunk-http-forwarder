@@ -78,16 +78,19 @@ func (s *s3Service) ListAndDelete() ([]string, error) {
 		vals = append(vals, val)
 	}
 
-	_, err = s.svc.DeleteObjects(&s3.DeleteObjectsInput{
-		Bucket: &s.bucketName,
-		Delete: &s3.Delete{
-			Objects: ids,
-		},
-	})
-	if err != nil {
-		return nil, err
+	if *out.KeyCount > 0 {
+		_, err = s.svc.DeleteObjects(&s3.DeleteObjectsInput{
+			Bucket: &s.bucketName,
+			Delete: &s3.Delete{
+				Objects: ids,
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return vals, nil
 	}
-	return vals, nil
+	return nil, nil
 }
 
 func (s *s3Service) Put(obj string) error {
