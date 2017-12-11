@@ -36,18 +36,17 @@ func NewRetry(action func(string) error, statusChecker func() serviceStatus, buc
 
 func (logRetry retry) Start() {
 	go func() {
-		level := 3
+		level := 3 // start conservative
 		for {
 			status := logRetry.statusChecker()
 			if status.healthy {
 				entries, err := logRetry.Dequeue()
 				if err != nil {
 					log.Printf("Failure retrieving logs from S3 %v\n", err)
-				} else {
+				} else if len(entries) > 0 {
 					log.Printf("Read %v messages from S3\n", len(entries))
 				}
 				for _, entry := range entries {
-					log.Printf("Retrying for message %v\n", entry)
 					err := logRetry.action(entry)
 					if err != nil {
 						if level < maxBackoff {
@@ -59,7 +58,12 @@ func (logRetry retry) Start() {
 						}
 					}
 					sleepDuration := time.Duration((0.15*math.Pow(2, float64(level))-0.2)*1000) * time.Millisecond
-					log.Printf("Sleeping for %v\n", sleepDuration)
+					if err != nil {
+						log.Printf("Retried one message unsuccessfully, ")
+					} else {
+						log.Printf("Retried one message successfully, ")
+					}
+					log.Printf("sleeping for %v\n", sleepDuration)
 					time.Sleep(sleepDuration)
 				}
 			}
