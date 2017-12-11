@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"errors"
 	graphite "github.com/cyberdelia/go-metrics-graphite"
 	"github.com/rcrowley/go-metrics"
 )
@@ -44,6 +45,8 @@ var (
 	timestampRegex  = regexp.MustCompile("([0-9]+)-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])[Tt]([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9]|60)(.[0-9]+)?(([Zz])|([+|-]([01][0-9]|2[0-3]):[0-5][0-9]))")
 	status          = serviceStatus{healthy: false, timestamp: time.Now()}
 	logRetry        Retry
+	request_count   metrics.Counter
+	error_count     metrics.Counter
 )
 
 func main() {
@@ -86,6 +89,7 @@ func main() {
 	}
 	go metrics.Log(metrics.DefaultRegistry, 5*time.Second, log.New(os.Stdout, "metrics ", log.Lmicroseconds))
 	go queueLenMetrics(logChan)
+	splunkMetrics()
 
 	for i := 0; i < workers; i++ {
 		wg.Add(1)
@@ -160,6 +164,11 @@ func main() {
 	}
 }
 
+func splunkMetrics() {
+	request_count = metrics.GetOrRegisterCounter("splunk_requests_total", metrics.DefaultRegistry)
+	error_count = metrics.GetOrRegisterCounter("splunk_requests_error", metrics.DefaultRegistry)
+}
+
 func queueLenMetrics(queue chan string) {
 	s := metrics.NewExpDecaySample(1024, 0.015)
 	h := metrics.GetOrRegisterHistogram("post.queue.length", metrics.DefaultRegistry, s)
@@ -169,8 +178,9 @@ func queueLenMetrics(queue chan string) {
 	}
 }
 
-func postToSplunk(s string) {
+func postToSplunk(s string) error {
 	t := metrics.GetOrRegisterTimer("post.time", metrics.DefaultRegistry)
+	var err error
 	t.Time(func() {
 		req, err := http.NewRequest("POST", fwdURL, strings.NewReader(s))
 		if err != nil {
@@ -178,9 +188,11 @@ func postToSplunk(s string) {
 		}
 		tokenWithKeyword := strings.Join([]string{"Splunk", token}, " ") //join strings "Splunk" and value of -token argument
 		req.Header.Set("Authorization", tokenWithKeyword)
+		request_count.Inc(1)
 		r, err := client.Do(req)
 		status.timestamp = time.Now()
 		if err != nil {
+			error_count.Inc(1)
 			log.Println(err)
 			cacheForRetry(s)
 			status.healthy = false
@@ -188,6 +200,8 @@ func postToSplunk(s string) {
 			defer r.Body.Close()
 			io.Copy(ioutil.Discard, r.Body)
 			if r.StatusCode != 200 {
+				err = errors.New(r.Status)
+				error_count.Inc(1)
 				status.healthy = false
 				log.Printf("Unexpected status code %v (%v) when sending %v to %v\n", r.StatusCode, r.Status, s, fwdURL)
 				cacheForRetry(s)
@@ -196,6 +210,7 @@ func postToSplunk(s string) {
 			}
 		}
 	})
+	return err
 }
 
 func cacheForRetry(s string) {
