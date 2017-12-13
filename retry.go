@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"math"
+	"sync"
 	"time"
 )
 
@@ -19,17 +20,31 @@ type Retry interface {
 }
 
 type serviceStatus struct {
+	sync.Mutex
 	healthy   bool
 	timestamp time.Time
 }
 
+func (status *serviceStatus) setHealthy(healthy bool, time time.Time) {
+	status.Lock()
+	defer status.Unlock()
+	status.healthy = healthy
+	status.timestamp = time
+}
+
+func (status *serviceStatus) isHealthy() bool {
+	status.Lock()
+	defer status.Unlock()
+	return status.healthy
+}
+
 type retry struct {
 	action        func(string) error
-	statusChecker func() serviceStatus
+	statusChecker func() *serviceStatus
 	cache         S3Service
 }
 
-func NewRetry(action func(string) error, statusChecker func() serviceStatus, bucketName string, awsRegion string) Retry {
+func NewRetry(action func(string) error, statusChecker func() *serviceStatus, bucketName string, awsRegion string) Retry {
 	svc, _ := NewS3Service(bucketName, awsRegion)
 	return retry{action, statusChecker, svc}
 }
@@ -39,7 +54,7 @@ func (logRetry retry) Start() {
 		level := 3 // start conservative
 		for {
 			status := logRetry.statusChecker()
-			if status.healthy {
+			if status.isHealthy() {
 				entries, err := logRetry.Dequeue()
 				if err != nil {
 					log.Printf("Failure retrieving logs from S3 %v\n", err)

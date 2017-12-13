@@ -13,16 +13,43 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
 
 type splunkMock struct {
+	sync.RWMutex
 	index      []string
 	errorCount int
 }
 
+func (splunk *splunkMock) append(s string) {
+	splunk.Lock()
+	defer splunk.Unlock()
+	splunk.index = append(splunk.index, s)
+}
+
+func (splunk *splunkMock) getIndex() []string {
+	splunk.Lock()
+	defer splunk.Unlock()
+	return splunk.index
+}
+
+func (splunk *splunkMock) incErrors() {
+	splunk.Lock()
+	defer splunk.Unlock()
+	splunk.errorCount++
+}
+
+func (splunk *splunkMock) getErrorCount() int {
+	splunk.Lock()
+	defer splunk.Unlock()
+	return splunk.errorCount
+}
+
 type s3ServiceMock struct {
+	sync.RWMutex
 	cache []string
 }
 
@@ -48,10 +75,10 @@ func TestMain(m *testing.M) {
 		defer r.Body.Close()
 		body := string(bytes)
 		if strings.Contains(body, "simulated_error") {
-			splunk.errorCount++
+			splunk.incErrors()
 			w.WriteHeader(http.StatusServiceUnavailable)
 		} else {
-			splunk.index = append(splunk.index, body)
+			splunk.append(body)
 			w.WriteHeader(http.StatusOK)
 		}
 	}))
@@ -108,8 +135,8 @@ func Test_Forwarder(t *testing.T) {
 		}
 	}
 	out.Close()
-	time.Sleep(2 * time.Second)
-	assert.Equal(t, messageCount/batchsize, len(splunk.index))
-	assert.Equal(t, 1, splunk.errorCount)
-	assert.Contains(t, strings.Join(splunk.index, ""), "simulated_retry")
+	time.Sleep(3 * time.Second)
+	assert.Equal(t, messageCount/batchsize, len(splunk.getIndex()))
+	assert.Equal(t, 1, splunk.getErrorCount())
+	assert.Contains(t, strings.Join(splunk.getIndex(), ""), "simulated_retry")
 }

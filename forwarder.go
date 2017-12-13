@@ -43,7 +43,7 @@ var (
 	br              *bufio.Reader
 	timerChan       = make(chan bool)
 	timestampRegex  = regexp.MustCompile("([0-9]+)-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])[Tt]([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9]|60)(.[0-9]+)?(([Zz])|([+|-]([01][0-9]|2[0-3]):[0-5][0-9]))")
-	status          = serviceStatus{healthy: false, timestamp: time.Now()}
+	status          = &serviceStatus{healthy: false, timestamp: time.Now()}
 	logRetry        Retry
 	request_count   metrics.Counter
 	error_count     metrics.Counter
@@ -190,23 +190,23 @@ func postToSplunk(s string) error {
 		req.Header.Set("Authorization", tokenWithKeyword)
 		request_count.Inc(1)
 		r, err := client.Do(req)
-		status.timestamp = time.Now()
+		timestamp := time.Now()
 		if err != nil {
 			error_count.Inc(1)
 			log.Println(err)
 			cacheForRetry(s)
-			status.healthy = false
+			status.setHealthy(false, timestamp)
 		} else {
 			defer r.Body.Close()
 			io.Copy(ioutil.Discard, r.Body)
 			if r.StatusCode != 200 {
 				err = errors.New(r.Status)
 				error_count.Inc(1)
-				status.healthy = false
+				status.setHealthy(false, timestamp)
 				log.Printf("Unexpected status code %v (%v) when sending %v to %v\n", r.StatusCode, r.Status, s, fwdURL)
 				cacheForRetry(s)
 			} else {
-				status.healthy = true
+				status.setHealthy(true, timestamp)
 			}
 		}
 	})
@@ -220,7 +220,7 @@ func cacheForRetry(s string) {
 	}
 }
 
-func isHealthy() serviceStatus {
+func isHealthy() *serviceStatus {
 	return status
 }
 
