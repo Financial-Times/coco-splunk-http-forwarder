@@ -204,7 +204,11 @@ func postToSplunk(s string) error {
 				error_count.Inc(1)
 				status.setHealthy(false, timestamp)
 				log.Printf("Unexpected status code %v (%v) when sending %v to %v\n", r.StatusCode, r.Status, s, fwdURL)
-				cacheForRetry(s)
+				if r.StatusCode != 400 {
+					cacheForRetry(s)
+				} else {
+					log.Printf("Discarding malformed message\n")
+				}
 			} else {
 				status.setHealthy(true, timestamp)
 			}
