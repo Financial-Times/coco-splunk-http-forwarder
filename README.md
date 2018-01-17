@@ -8,9 +8,8 @@ docker build -t coco/coco-splunk-http-forwarder .
 ```
 
 ## Description
-The Splunk forwarder is a golang application that posts a stdin to a provided URL.
-Failed messages are stored in S3 and retried with an exponential backoff mechanism, in parallel to the normal flow.
-Docker images builds a container that forwards the journalctl logs to the Splunk endpoint
+The Splunk forwarder is a golang application that posts a stdin to S3 in order to be processed by the resilient Splunk forwarder.
+Docker image builds a container that stores the journalctl logs to S3.
  
 ## Usage ex
-e.g. journalctl -f --output=json | ./coco-splunk-http-forwarder -url=$FORWARD_URL
+e.g. journalctl -f --output=json | ./coco-splunk-http-forwarder -env=$ENV -workers=$WORKERS -buffer=$BUFFER -batchsize=$BATCHSIZE -batchtimer=$BATCHTIMER -bucketName=$BUCKET_NAME -prefix=$PREFIX -awsRegion=$AWS_REGION
